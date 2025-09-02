@@ -1,97 +1,95 @@
 from airflow import DAG
 from airflow.operators.python import PythonOperator
-from airflow.utils.dates import days_ago
-from airflow.utils.task_group import TaskGroup
-
+from airflow.providers.postgres.hooks.postgres import PostgresHook
+from datetime import datetime
 import pandas as pd
 import os
-import hashlib
-from datetime import datetime
-from sqlalchemy import create_engine
 
-# Configurações dos bancos
-SOURCE_DB = {
-    "host": "source_db",
-    "port": 5432,
-    "database": "banvic",
-    "user": "data_engineer",
-    "password": "v3rysecur&pas5w0rd"
+# Caminho base para salvar os CSVs
+BASE_PATH = "/opt/airflow/data"
+
+def extract_postgres(**context):
+    """Extrai dados do banco de origem (source_db) e salva em CSV."""
+    hook = PostgresHook(postgres_conn_id="source_postgres")
+    tables = ["clientes", "produtos", "transacoes"]  # ajuste conforme seu banvic.sql
+    
+    run_date = context["ds"]  # Data de execução no formato YYYY-MM-DD
+    output_dir = os.path.join(BASE_PATH, run_date, "source_db")
+    os.makedirs(output_dir, exist_ok=True)
+
+    for table in tables:
+        print(f"🔍 Conectando no source_db e extraindo tabela: {table}")
+        df = hook.get_pandas_df(f"SELECT * FROM {table};")
+        output_file = os.path.join(output_dir, f"{table}.csv")
+        df.to_csv(output_file, index=False)
+        print(f"✅ Tabela {table} salva em {output_file} com {len(df)} registros")
+
+def extract_csv(**context):
+    run_date = context["ds"]
+    output_dir = os.path.join(BASE_PATH, run_date, "csv")
+    os.makedirs(output_dir, exist_ok=True)
+
+    source_file = "/opt/airflow/source_data/transacoes.csv"  # ajuste aqui!
+    target_file = os.path.join(output_dir, "transacoes.csv")
+
+    print(f"📂 Copiando {source_file} para {target_file}")
+    if not os.path.exists(source_file):
+        raise FileNotFoundError(f"❌ Arquivo CSV de origem não encontrado: {source_file}")
+
+    df = pd.read_csv(source_file)
+    df.to_csv(target_file, index=False)
+    print(f"✅ Arquivo CSV copiado com {len(df)} registros")
+
+def load_to_dw(**context):
+    """Carrega os arquivos CSV no Data Warehouse (dw_postgres)."""
+    hook = PostgresHook(postgres_conn_id="dw_postgres")
+    engine = hook.get_sqlalchemy_engine()
+
+    run_date = context["ds"]
+    input_dir = os.path.join(BASE_PATH, run_date)
+
+    for root, _, files in os.walk(input_dir):
+        for file in files:
+            if file.endswith(".csv"):
+                table_name = file.replace(".csv", "")
+                file_path = os.path.join(root, file)
+                print(f"📥 Carregando {file_path} para tabela {table_name} no DW")
+                df = pd.read_csv(file_path)
+                df.to_sql(table_name, engine, if_exists="replace", index=False)
+                print(f"✅ Tabela {table_name} carregada com {len(df)} registros")
+
+default_args = {
+    "owner": "airflow",
+    "retries": 1,
 }
 
-DW_DB = {
-    "host": "dw_postgres",
-    "port": 5432,
-    "database": "dw_db",
-    "user": "dw_user",
-    "password": "dw_pass"
-}
-
-DATA_PATH = "/opt/airflow/data"
-
-# Função para extrair CSV
-def extract_csv():
-    df = pd.read_csv("/opt/airflow/source_data/transactions.csv")
-    today = datetime.today().strftime("%Y-%m-%d")
-    out_dir = os.path.join(DATA_PATH, today, "csv")
-    os.makedirs(out_dir, exist_ok=True)
-    df.to_csv(os.path.join(out_dir, "transactions.csv"), index=False)
-
-# Função para extrair tabelas SQL
-def extract_sql_table(table_name):
-    engine = create_engine(f"postgresql+psycopg2://{SOURCE_DB['user']}:{SOURCE_DB['password']}@{SOURCE_DB['host']}:{SOURCE_DB['port']}/{SOURCE_DB['database']}")
-    df = pd.read_sql_table(table_name, engine)
-    today = datetime.today().strftime("%Y-%m-%d")
-    out_dir = os.path.join(DATA_PATH, today, "sql")
-    os.makedirs(out_dir, exist_ok=True)
-    df.to_csv(os.path.join(out_dir, f"{table_name}.csv"), index=False)
-
-# Função para carregar dados no Data Warehouse
-def load_dw():
-    today = datetime.today().strftime("%Y-%m-%d")
-    dw_engine = create_engine(f"postgresql+psycopg2://{DW_DB['user']}:{DW_DB['password']}@{DW_DB['host']}:{DW_DB['port']}/{DW_DB['database']}")
-    
-    # Carregar CSV
-    csv_path = os.path.join(DATA_PATH, today, "csv", "transactions.csv")
-    df_csv = pd.read_csv(csv_path)
-    df_csv["_md5hash"] = df_csv.apply(lambda row: hashlib.md5(str(row.values).encode()).hexdigest(), axis=1)
-    df_csv.to_sql("transactions", dw_engine, if_exists="append", index=False, method='multi', chunksize=5000)
-    
-    # Carregar tabelas SQL
-    sql_dir = os.path.join(DATA_PATH, today, "sql")
-    for file in os.listdir(sql_dir):
-        df_sql = pd.read_csv(os.path.join(sql_dir, file))
-        df_sql["_md5hash"] = df_sql.apply(lambda row: hashlib.md5(str(row.values).encode()).hexdigest(), axis=1)
-        table_name = file.replace(".csv", "")
-        df_sql.to_sql(table_name, dw_engine, if_exists="append", index=False, method='multi', chunksize=5000)
-
-# Definição da DAG
 with DAG(
-    dag_id="banvic_daily_etl",
-    start_date=days_ago(1),
-    schedule_interval="35 4 * * *",
+    dag_id="banvic_etl_dag",
+    default_args=default_args,
+    description="Pipeline ETL Banvic com logs detalhados",
+    schedule_interval="35 4 * * *",  # 04:35 AM todo dia
+    start_date=datetime(2025, 1, 1),
     catchup=False,
-    max_active_runs=1
+    tags=["banvic", "etl"],
 ) as dag:
 
-    t1 = PythonOperator(
+    extract_postgres_task = PythonOperator(
+        task_id="extract_postgres",
+        python_callable=extract_postgres,
+        provide_context=True,
+    )
+
+    extract_csv_task = PythonOperator(
         task_id="extract_csv",
-        python_callable=extract_csv
+        python_callable=extract_csv,
+        provide_context=True,
     )
 
-    # Lista de tabelas SQL (substitua pelos nomes reais do banvic.sql)
-    sql_tables = ["customers", "orders", "products"]
-    t2_tasks = []
-    with TaskGroup("extract_sql_tables") as t2_group:
-        for table in sql_tables:
-            t2_tasks.append(PythonOperator(
-                task_id=f"extract_{table}",
-                python_callable=extract_sql_table,
-                op_args=[table]
-            ))
-
-    t3 = PythonOperator(
-        task_id="load_dw",
-        python_callable=load_dw
+    load_to_dw_task = PythonOperator(
+        task_id="load_to_dw",
+        python_callable=load_to_dw,
+        provide_context=True,
     )
 
-    [t1, t2_group] >> t3
+    # Execuções paralelas, mas carregamento só após sucesso de ambas
+    [extract_postgres_task, extract_csv_task] >> load_to_dw_task
