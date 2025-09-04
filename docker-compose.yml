@@ -1,34 +1,48 @@
 version: '3.8'
 
 services:
-  # Banco Fonte (simulado)
-  db:
+  # Banco Fonte (simulado a partir do dump banvic.sql)
+  source_db:
     image: postgres:16
+    container_name: source_db
     environment:
       POSTGRES_DB: banvic
       POSTGRES_USER: data_engineer
       POSTGRES_PASSWORD: v3rysecur&pas5w0rd
     volumes:
       - ./dbdata:/var/lib/postgresql/data
-      - ./banvic.sql:/docker-entrypoint-initdb.d/banvic.sql
+      - ./source_db/banvic.sql:/docker-entrypoint-initdb.d/banvic.sql
     ports:
-      - 55432:5432
+      - "55432:5432"
 
   # Data Warehouse (Destino)
   dw_postgres:
     image: postgres:16
+    container_name: dw_postgres
     environment:
-      POSTGRES_DB: dw_banvic
-      POSTGRES_USER: dw_user
-      POSTGRES_PASSWORD: dw_password
+      POSTGRES_DB: airflow
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
     volumes:
       - ./dwdata:/var/lib/postgresql/data
     ports:
-      - 5433:5432
+      - "5433:5432"
 
-  # Airflow - Inicialização
+  # Banco interno do Airflow (metadados)
+  airflow-db:
+    image: postgres:16
+    container_name: airflow_db
+    environment:
+      POSTGRES_DB: airflow
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+    volumes:
+      - ./airflow_db:/var/lib/postgresql/data
+
+  # Airflow - Inicialização (db init + usuário admin)
   airflow-init:
     image: apache/airflow:2.7.2
+    container_name: airflow_init
     entrypoint: /bin/bash
     command:
       - -c
@@ -45,25 +59,21 @@ services:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
       - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@airflow-db/airflow
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__WEBSERVER__SECRET_KEY=my_super_secret_key
+      - AIRFLOW__LOGGING__BASE_LOG_FOLDER=/opt/airflow/logs
+      - AIRFLOW__LOGGING__DAG_PROCESSOR_MANAGER_LOG_LOCATION=/opt/airflow/logs/dag_processor_manager/dag_processor_manager.log
     depends_on:
       - airflow-db
     volumes:
       - ./dags:/opt/airflow/dags
       - ./data:/opt/airflow/data
-
-  # Airflow - Banco interno
-  airflow-db:
-    image: postgres:16
-    environment:
-      POSTGRES_DB: airflow
-      POSTGRES_USER: airflow
-      POSTGRES_PASSWORD: airflow
-    volumes:
-      - ./airflow_db:/var/lib/postgresql/data
+      - ./source_data:/opt/airflow/source_data
+      - ./logs:/opt/airflow/logs
 
   # Airflow - Webserver
   airflow-webserver:
     image: apache/airflow:2.7.2
+    container_name: airflow_webserver
     restart: always
     depends_on:
       - airflow-db
@@ -72,16 +82,22 @@ services:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
       - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@airflow-db/airflow
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__WEBSERVER__SECRET_KEY=my_super_secret_key
+      - AIRFLOW__LOGGING__BASE_LOG_FOLDER=/opt/airflow/logs
+      - AIRFLOW__LOGGING__DAG_PROCESSOR_MANAGER_LOG_LOCATION=/opt/airflow/logs/dag_processor_manager/dag_processor_manager.log
     ports:
-      - 8080:8080
+      - "8080:8080"
     volumes:
       - ./dags:/opt/airflow/dags
       - ./data:/opt/airflow/data
-    command: webserver
+      - ./source_data:/opt/airflow/source_data
+      - ./logs:/opt/airflow/logs
+    command: webserver --host 0.0.0.0
 
   # Airflow - Scheduler
   airflow-scheduler:
     image: apache/airflow:2.7.2
+    container_name: airflow_scheduler
     restart: always
     depends_on:
       - airflow-db
@@ -90,7 +106,12 @@ services:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
       - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@airflow-db/airflow
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__WEBSERVER__SECRET_KEY=my_super_secret_key
+      - AIRFLOW__LOGGING__BASE_LOG_FOLDER=/opt/airflow/logs
+      - AIRFLOW__LOGGING__DAG_PROCESSOR_MANAGER_LOG_LOCATION=/opt/airflow/logs/dag_processor_manager/dag_processor_manager.log
     volumes:
       - ./dags:/opt/airflow/dags
       - ./data:/opt/airflow/data
+      - ./source_data:/opt/airflow/source_data
+      - ./logs:/opt/airflow/logs
     command: scheduler
