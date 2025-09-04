@@ -1,7 +1,5 @@
 # BanVic ETL Pipeline
 
-# Projeto ETL - BanVic
-
 Este projeto implementa um pipeline de **ETL (Extract, Transform, Load)** utilizando **Apache Airflow** e **PostgreSQL**.  
 O objetivo é centralizar dados de diferentes fontes (ERP, CRM, Marketing) em um **Data Warehouse** para possibilitar análises e integração com ferramentas de BI (Metabase, PowerBI, Looker, etc.).
 
