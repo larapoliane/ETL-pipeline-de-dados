@@ -8,11 +8,8 @@
 - DW Postgres: localhost:5433
 - Airflow Web: http://localhost:8080
 
-## Rodando o projeto
-1. Coloque o SQL e CSV nas pastas corretas
-2. Suba os containers:
-```bash
-docker compose up -d --build
-```
-3. Inicialize Airflow e crie usuário admin
-4. Ative a DAG `banvic_daily_etl` e execute
+
+<img width="740" height="332" alt="image" src="https://github.com/user-attachments/assets/b7d67ea4-9ca4-4cff-83ca-d56176ef0f37" />
+
+
+
