@@ -5,6 +5,26 @@ O objetivo é centralizar dados de diferentes fontes.
 
 ---
 
+# Estrutura do Projeto
+
+```bash
+.
+├── dags/                → onde está sua DAG (`banvic_dag.py`)
+│   └── banvic_dag.py
+│
+├── docker-compose.yml   → para subir os containers
+│
+├── requirements.txt     → para instalar dependências
+│
+├── README.md            → com instruções
+│
+├── source_data/         → dados de entrada em CSV necessários para reproduzir o pipeline
+│   └── transacoes.csv
+│
+└── source_db/           → dados de entrada em SQL necessários para reproduzir o pipeline
+    └── banvic.sql
+
+
 ## 🚀 Visão Geral do Pipeline
 
 Fluxo de dados:
@@ -46,7 +66,15 @@ Fluxo de dados:
 
 <img width="740" height="332" alt="image" src="https://github.com/user-attachments/assets/b7d67ea4-9ca4-4cff-83ca-d56176ef0f37" />
 
+📌 Pré-requisitos Para Rodar o Projeto
 
+Antes de rodar o pipeline, certifique-se de ter instalado:
+
+ * Docker (>= 20.x)
+
+ * Docker Compose (>= 1.29)
+
+ * Git (para clonar o repositório)
 
 ## Passo a Passo de Execução
 
@@ -76,7 +104,7 @@ Usuário e senha padrão:
 4 Executar a DAG
 
 Na UI do Airflow, ative a DAG banvic_dag.
-Clique em ▶ Trigger DAG para rodar manualmente.
+Clique em Trigger DAG para rodar manualmente.
 Acompanhe os logs de cada task.
 
 Para Conferir as Tabelas no DW (dw_postgres):
