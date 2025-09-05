@@ -51,6 +51,7 @@ Fluxo de dados:
 ## Passo a Passo de Execução
 
 1 Clonar o projeto
+
   git clone <url-do-repositorio>
   cd <nome-do-projeto>
 
