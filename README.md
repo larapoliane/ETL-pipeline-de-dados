@@ -1,7 +1,7 @@
 # BanVic ETL Pipeline
 
 Este projeto implementa um pipeline de **ETL (Extract, Transform, Load)** utilizando **Apache Airflow** e **PostgreSQL**.  
-O objetivo é centralizar dados de diferentes fontes (ERP, CRM, Marketing) em um **Data Warehouse** para possibilitar análises e integração com ferramentas de BI (Metabase, PowerBI, Looker, etc.).
+O objetivo é centralizar dados de diferentes fontes.
 
 ---
 
@@ -43,26 +43,62 @@ Fluxo de dados:
 - [Docker Compose](https://docs.docker.com/compose/) → Gerenciamento dos serviços  
 
 ---
-## 📂 Estrutura do Projeto
-ETL-pipeline-de-dados/
-├── dags/
-│ └── banvic_dag.py # DAG do Airflow (pipeline principal)
-├── source_db/
-│ └── banvic.sql # Dump SQL do banco de origem
-├── source_data/
-│ └── transacoes.csv # Arquivo CSV de transações
-├── data/ # Data Lake (gerado automaticamente)
-├── dbdata/ # Volume do banco de origem (Postgres)
-├── dwdata/ # Volume do Data Warehouse
-├── airflow_db/ # Volume do metadatabase do Airflow
-└── docker-compose.yml # Configuração dos serviços
-
-
-
-
-
 
 <img width="740" height="332" alt="image" src="https://github.com/user-attachments/assets/b7d67ea4-9ca4-4cff-83ca-d56176ef0f37" />
+
+
+
+## Passo a Passo de Execução
+
+1 Clonar o projeto
+  git clone <url-do-repositorio>
+  cd <nome-do-projeto>
+
+2 Subir os containers
+  docker compose up -d --build
+
+  Irá subir:
+  * airflow_webserver → Interface do Airflow
+  * airflow_scheduler → Scheduler do Airflow
+  * airflow_db → Banco interno do Airflow
+  * source_db → Banco de origem (com dados do banvic.sql)
+  * dw_postgres → Data Warehouse
+
+3 Acessar o Airflow
+
+Abra no navegador:
+👉 http://localhost:8080
+Usuário e senha padrão:
+  Usuário: admin
+  Senha: admin
+
+4 Executar a DAG
+
+Na UI do Airflow, ative a DAG banvic_dag.
+Clique em ▶ Trigger DAG para rodar manualmente.
+Acompanhe os logs de cada task.
+
+Para Conferir as Tabelas no DW (dw_postgres):
+
+docker exec -it dw_postgres psql -U airflow -d airflow
+
+E consultar por exemplo:
+
+SELECT COUNT(*) FROM clientes;
+SELECT COUNT(*) FROM transacoes;
+
+
+📌 Observações
+
+* O pipeline roda diariamente às 04:35 da manhã.
+* As extrações são idempotentes (recriam os arquivos a cada execução).
+* A DAG só carrega dados no DW se todas as extrações forem concluídas com sucesso.
+
+
+
+
+
+
 
 
 
