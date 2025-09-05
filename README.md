@@ -64,7 +64,7 @@ Fluxo de dados:
 
 ---
 
-<img width="740" height="332" alt="image" src="https://github.com/user-attachments/assets/b7d67ea4-9ca4-4cff-83ca-d56176ef0f37" />
+
 
 📌 Pré-requisitos Para Rodar o Projeto
 
